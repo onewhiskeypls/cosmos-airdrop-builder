@@ -1,0 +1,5 @@
+DS_STORE
+.DS_STORE
+data/*.json
+data/osmosis*
+package-lock.json
