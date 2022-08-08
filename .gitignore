@@ -3,4 +3,4 @@ DS_STORE
 data/*.json
 data/osmosis*
 package-lock.json
-node_modules/
+node_modules
