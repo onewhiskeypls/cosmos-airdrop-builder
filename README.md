@@ -77,3 +77,16 @@ junod q wasm contract-state all juno1e8n6ch7msks487ecznyeagmzd5ml2pq9tgedqt2u63v
   junoswap - ((user's share of wslpt + user's bonded tokens) / total tokens) * (TOTAL TOKENS IN POOL)
   */
 ```
+
+## Steps to run
+
+1. download the osmosis snapshot
+2. grab the 3 needed files (juno contract snapshot - holders.json, junoswap lp contract snapshot - lpers.json, and junoswap lp bonded snapshot - bonded.json)
+3. execute generate_proof_file.js
+- You may need to run it with 
+```
+
+node --max-old-space-size=8192 generate_proof_file.js
+
+```
+4. execute generate_airdrop_list.js
