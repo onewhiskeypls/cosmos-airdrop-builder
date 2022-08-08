@@ -1,7 +1,5 @@
 const fs = require('fs');
 
-// node --max-old-space-size=8192 generate_proof_file.js
-
 let FILE_JSON = {}; // stores JSON from proof.json file
 let TVL = {}; // stores data from TVL row
 let MASTER_DATA = {}; // creates juno1addr: token list
