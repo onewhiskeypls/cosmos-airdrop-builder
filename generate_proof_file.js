@@ -40,6 +40,9 @@ function main() {
   // also checks lockup locks for bonded LP for incentivized pools. note osmosis no longer has incentivized pools for neta and some people just never "claimed" to release those tokens
   // the processOsmosisLocks function will save the resultset update MASTER_DATA.tvl.junoswap_lp_shares = JS_LP_TOKEN_TOTAL;
   processOsmosis();
+
+  //MASTER_DATA.tvl.junoswap_lp_shares = JS_LP_TOKEN_TOTAL;
+  //fs.writeFile(PROOF_FILENAME, JSON.stringify(MASTER_DATA), 'utf8', () => {});
 }
 
 function processHolders() {
@@ -60,7 +63,7 @@ function processBonded() {
     staked_balances: "onjuno_bonded",
     claims: "onjuno_unbonding",
   };
-  parseFile(parseLogic);
+  parseFile(parseLogic, false, true);
 }
 
 function processOsmosis() {
@@ -165,11 +168,13 @@ function openFile(filePath) {
   if object is an array, then we need to go find an "amount"
 */
 
-function parseFile(parseLogic, checkLPTokenBalance) {
+function parseFile(parseLogic, checkLPTokenBalance, checkBondedBalance) {
+  let test = 0, test1 = 0, test2 = 0, test3 = 0;
   let keys = Object.keys(parseLogic)
   if (FILE_JSON["models"] != null && FILE_JSON["models"].length > 0) {
     for (let i = 0; i < FILE_JSON["models"].length; i++) {
       let data = FILE_JSON["models"][i];
+      let amount = 0;
 
       let convertedKey = Buffer.from(data.key, 'hex').toString('ascii');
 
@@ -183,7 +188,6 @@ function parseFile(parseLogic, checkLPTokenBalance) {
         let dataValue = {};
         // only perform this on balance keys
         if (convertedKey.startsWith(key)) {
-
           if (typeof convertedValue == "object") {
             let val = 0;
             for (let j = 0; j < convertedValue.length; j++) {
@@ -191,14 +195,25 @@ function parseFile(parseLogic, checkLPTokenBalance) {
               // strip the \" from b64 conversion
               amt = amt.replace(/\"/g, '');
               // parseInt and use uneta value until final
+
               val += parseInt(amt)
+
+
+              if (j > 0) {
+                test3 += parseInt(amt);
+              } else {
+                test1 += val;
+              }
             }
 
-            convertedValue = val;
+            amount += val;
+          } else {
+            amount = parseInt(convertedValue);
+            test += parseInt(amount);
           }
 
           // parseInt and use uneta value until final
-          convertedValue = parseInt(convertedValue)
+          amount = parseInt(amount)
 
           // key has prefix of "balancejuno1..." so we strip
           convertedKey = convertedKey.replace(key, "");
@@ -207,17 +222,28 @@ function parseFile(parseLogic, checkLPTokenBalance) {
             dataValue = Object.assign({}, MASTER_DATA[convertedKey]);
           }
 
-          dataValue[parseLogic[key]] = convertedValue;
+          if (checkBondedBalance) {
+            test2 += amount;
+          }
+
+          dataValue[parseLogic[key]] = amount;
+          delete MASTER_DATA[convertedKey];
           MASTER_DATA[convertedKey] = dataValue;
         }
       });
 
+
       if (checkLPTokenBalance && convertedKey == "token_info") {
         let total_supply = convertedValue['total_supply'];
-        JS_LP_TOKEN_TOTAL = parseInt(total_supply);
+        JS_LP_TOKEN_TOTAL += parseInt(total_supply);
       }
     }
   }
+  console.log(`test ${test}`);
+  console.log(test1);
+  console.log(test2);
+  console.log(test3);
+  console.log(test + test1+test3);
 }
 
 main();
