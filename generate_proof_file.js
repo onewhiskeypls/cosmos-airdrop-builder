@@ -3,8 +3,10 @@ const JSONStream = require("JSONStream");
 const es = require('event-stream');
 const { bech32 } = require("bech32");
 
+/// execute using node --max-old-space-size=8192 generate_proof_file.js if you get the error
+
 let MASTER_DATA = {
-  tvl: {
+  tvl: { // start with this and return for next script to use
     junoswap_lp_shares: 0, // this is retrieved in the lpers.json file under "total_supply"
     junoswap_tokens: 3438192663, // see junod q wasm contract-state all juno1e8n6ch7msks487ecznyeagmzd5ml2pq9tgedqt2u63vra0q0r9mqrjy6ys --height xx --limit 50000 -o json
     osmosis_lp_shares: "972461319594096904362423", // retrieved from osmosisd q gamm total-share 631 --height xx
@@ -40,9 +42,6 @@ function main() {
   // also checks lockup locks for bonded LP for incentivized pools. note osmosis no longer has incentivized pools for neta and some people just never "claimed" to release those tokens
   // the processOsmosisLocks function will save the resultset update MASTER_DATA.tvl.junoswap_lp_shares = JS_LP_TOKEN_TOTAL;
   processOsmosis();
-
-  //MASTER_DATA.tvl.junoswap_lp_shares = JS_LP_TOKEN_TOTAL;
-  //fs.writeFile(PROOF_FILENAME, JSON.stringify(MASTER_DATA), 'utf8', () => {});
 }
 
 function processHolders() {
@@ -63,11 +62,11 @@ function processBonded() {
     staked_balances: "onjuno_bonded",
     claims: "onjuno_unbonding",
   };
-  parseFile(parseLogic, false, true);
+  parseFile(parseLogic);
 }
 
 function processOsmosis() {
-  let balances = [];
+  // open the big boy
   const getStream = () => {
     const jsonData = OSMOSIS_SNAPSHOT_FILENAME;
     const stream = fs.createReadStream(jsonData, { encoding: "utf8" });
@@ -75,6 +74,7 @@ function processOsmosis() {
     return stream.pipe(parser);
   };
 
+  // process osmo bank balances and process lockups
   getStream()
   .pipe(es.mapSync(function (data) {
     if (data != null && Object.keys(data).length > 0 && data["bank"] != null) {
@@ -168,16 +168,14 @@ function openFile(filePath) {
   if object is an array, then we need to go find an "amount"
 */
 
-function parseFile(parseLogic, checkLPTokenBalance, checkBondedBalance) {
-  let test = 0, test1 = 0, test2 = 0, test3 = 0;
+function parseFile(parseLogic, checkLPTokenBalance) {
   let keys = Object.keys(parseLogic)
   if (FILE_JSON["models"] != null && FILE_JSON["models"].length > 0) {
     for (let i = 0; i < FILE_JSON["models"].length; i++) {
       let data = FILE_JSON["models"][i];
-      let amount = 0;
+      let amount = 0; // store tokens/lp shares in this var
 
       let convertedKey = Buffer.from(data.key, 'hex').toString('ascii');
-
       let convertedValue = Buffer.from(data.value, "base64").toString('ascii');
 
       convertedKey = convertedKey.replace(/[^\x20-\x7E]/g, '');
@@ -186,8 +184,10 @@ function parseFile(parseLogic, checkLPTokenBalance, checkBondedBalance) {
 
       keys.map((key) => {
         let dataValue = {};
-        // only perform this on balance keys
+        // only perform this on keys in parseLogic
         if (convertedKey.startsWith(key)) {
+
+          // if this may be an array, so we'll go get the coin amounts
           if (typeof convertedValue == "object") {
             let val = 0;
             for (let j = 0; j < convertedValue.length; j++) {
@@ -197,53 +197,37 @@ function parseFile(parseLogic, checkLPTokenBalance, checkBondedBalance) {
               // parseInt and use uneta value until final
 
               val += parseInt(amt)
-
-
-              if (j > 0) {
-                test3 += parseInt(amt);
-              } else {
-                test1 += val;
-              }
             }
 
             amount += val;
           } else {
+            // parseInt and use uneta/lpshare value until final
             amount = parseInt(convertedValue);
-            test += parseInt(amount);
           }
 
-          // parseInt and use uneta value until final
+          // parseInt and use uneta/lpshare value until final
           amount = parseInt(amount)
 
-          // key has prefix of "balancejuno1..." so we strip
+          // key has prefix of "balancejuno1..." or similar so we strip
           convertedKey = convertedKey.replace(key, "");
 
           if (MASTER_DATA[convertedKey] != null) {
             dataValue = Object.assign({}, MASTER_DATA[convertedKey]);
           }
 
-          if (checkBondedBalance) {
-            test2 += amount;
-          }
-
           dataValue[parseLogic[key]] = amount;
-          delete MASTER_DATA[convertedKey];
+
           MASTER_DATA[convertedKey] = dataValue;
         }
       });
 
-
+      // one off, grab token info and store in master value
       if (checkLPTokenBalance && convertedKey == "token_info") {
         let total_supply = convertedValue['total_supply'];
         JS_LP_TOKEN_TOTAL += parseInt(total_supply);
       }
     }
   }
-  console.log(`test ${test}`);
-  console.log(test1);
-  console.log(test2);
-  console.log(test3);
-  console.log(test + test1+test3);
 }
 
 main();

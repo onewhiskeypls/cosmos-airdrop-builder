@@ -4,7 +4,7 @@ let FILE_JSON = {}; // stores JSON from proof.json file
 let TVL = {}; // stores data from TVL row
 let MASTER_DATA = {}; // creates juno1addr: token list
 let DECIMALS = Math.pow(10, 6); // to convert tokens to full neta
-let DECIMALS_1T = Math.pow(10, 10); // BIG INT multiplier and divider per...somewhere on stackoverflow NOTE YOU CAN INCREASE THE PRECISION ON THIS BUT IT WILL BRING THE TOTAL COUNT OVER MAX TOTAL SUPPLY
+let DECIMALS_MULTIPLIER = Math.pow(10, 10); // BIG INT multiplier and divider per...somewhere on stackoverflow NOTE YOU CAN INCREASE THE PRECISION ON THIS BUT IT WILL BRING THE TOTAL COUNT OVER MAX TOTAL SUPPLY
 let BIGDECIMALS = 10000000000n; // see top
 
 let total_tokens = 0; // for logging
@@ -17,11 +17,11 @@ let ADDRESSES_TO_EXCLUDE = [
 ];
 
 let SUMMARY = {
-  juno_holders: 0,
-  juno_lpers: 0,
-  juno_bonded: 0,
-  osmo_holders: 0,
-  osmo_lpers: 0,
+  total_tokens_for_juno_holders: 0,
+  total_tokens_for_juno_lpers: 0,
+  total_tokens_for_juno_bonded_lper: 0,
+  total_tokens_for_osmo_holders: 0,
+  total_tokens_for_osmo_lpers: 0,
   junoswap_lp_shares: 0n,
   onosmo_lper_shares: 0n,
   junoswap_lp_shares_lp: 0n,
@@ -41,18 +41,20 @@ function main() {
 
   Object.keys(FILE_JSON).map((key) => {
     let data = FILE_JSON[key];
-    let running_tokens = 0;
+    let user_total_tokens = 0; // use var to store total amount of tokens per juno addr
 
-    // calculate JUNO holder
+    /// calculate JUNO holder
     if (data["onjuno_holder"] != null && data["onjuno_holder"] != undefined && data["onjuno_holder"] > 0) {
-      running_tokens += parseFloat((data["onjuno_holder"] / DECIMALS).toFixed(6));
+      user_total_tokens += customParseFloat(data["onjuno_holder"]);
       if (!ADDRESSES_TO_EXCLUDE.includes(key)) {
-        SUMMARY.juno_holders += parseFloat((data["onjuno_holder"] / DECIMALS).toFixed(6));
+        SUMMARY.total_tokens_for_juno_holders += customParseFloat(data["onjuno_holder"]);
       }
     }
 
+    /// next section calculates JS lper + JS bonded + JS unbonding amounts
     let junoswap_lp_shares = 0n;
 
+    // JS base lper
     if (data["onjuno_lper"] != null && data["onjuno_lper"] != undefined && data["onjuno_lper"] > 0) {
       junoswap_lp_shares += BigInt(data["onjuno_lper"]);
       if (!ADDRESSES_TO_EXCLUDE.includes(key)) {
@@ -60,6 +62,7 @@ function main() {
       }
     }
 
+    // JS bonded
     if (data["onjuno_bonded"] != null && data["onjuno_bonded"] != undefined && data["onjuno_bonded"] > 0) {
       junoswap_lp_shares += BigInt(data["onjuno_bonded"]);
       if (!ADDRESSES_TO_EXCLUDE.includes(key)) {
@@ -67,6 +70,7 @@ function main() {
       }
     }
 
+    // JS unbonding
     if (data["onjuno_unbonding"] != null && data["onjuno_unbonding"] != undefined && data["onjuno_unbonding"] > 0) {
       junoswap_lp_shares += BigInt(data["onjuno_unbonding"]);
       if (!ADDRESSES_TO_EXCLUDE.includes(key)) {
@@ -74,56 +78,57 @@ function main() {
       }
     }
 
+    // total bonding shares -> calculate user's share
     if (junoswap_lp_shares > 0n) {
-      let user_lp_share = Number(((junoswap_lp_shares*BIGDECIMALS) / BigInt(TVL.junoswap_lp_shares)))/DECIMALS_1T;
+      let user_lp_share = Number(((junoswap_lp_shares*BIGDECIMALS) / BigInt(TVL.junoswap_lp_shares)))/DECIMALS_MULTIPLIER;
       let asset_val = user_lp_share * TVL.junoswap_tokens;
-      let amt = (asset_val / DECIMALS).toFixed(6);
+      user_total_tokens += customParseFloat(asset_val);
 
-      running_tokens += parseFloat(amt);
       if (!ADDRESSES_TO_EXCLUDE.includes(key)) {
-        SUMMARY.juno_lpers += parseFloat(amt);
+        SUMMARY.total_tokens_for_juno_lpers += customParseFloat(asset_val);
         SUMMARY.junoswap_lp_shares += junoswap_lp_shares;
       }
     }
 
-    // calculate OSMO holder
+    /// calculate OSMO holder
     if (data["onosmo_holder"] != null && data["onosmo_holder"] > 0) {
-      running_tokens += parseFloat((data["onosmo_holder"] / DECIMALS).toFixed(6));
+      user_total_tokens += customParseFloat(data["onosmo_holder"]);
       if (!ADDRESSES_TO_EXCLUDE.includes(key)) {
-        SUMMARY.osmo_holders += parseFloat((data["onosmo_holder"] / DECIMALS).toFixed(6));
+        SUMMARY.total_tokens_for_osmo_holders += customParseFloat(data["onosmo_holder"]);
       }
     }
 
-    // calculate OSMO LPer
+    /// calculate OSMO LPer
     if (data["onosmo_lper"] != null && data["onosmo_lper"] != undefined && data["onosmo_lper"].length > 0) {
-      let user_lp_share = Number(((BigInt(data["onosmo_lper"])*BIGDECIMALS) / BigInt(TVL.osmosis_lp_shares)))/DECIMALS_1T;
+      let user_lp_share = Number(((BigInt(data["onosmo_lper"])*BIGDECIMALS) / BigInt(TVL.osmosis_lp_shares)))/DECIMALS_MULTIPLIER;
       let asset_val = user_lp_share * TVL.osmosis_tokens;
-      let amt = (asset_val / DECIMALS).toFixed(6);
+      user_total_tokens += customParseFloat(asset_val);
 
-      running_tokens += parseFloat(amt);
       if (!ADDRESSES_TO_EXCLUDE.includes(key)) {
-        SUMMARY.osmo_lpers += parseFloat(amt);
+        SUMMARY.total_tokens_for_osmo_lpers += customParseFloat(asset_val);
         SUMMARY.onosmo_lper_shares += BigInt(data["onosmo_lper"])
       }
     }
 
-    if (running_tokens > 0) {
+    if (user_total_tokens > 0) {
       if (!ADDRESSES_TO_EXCLUDE.includes(key)) {
-        MASTER_DATA[key] = parseFloat(Number(running_tokens).toFixed(6));
-        total_tokens += parseFloat(Number(running_tokens).toFixed(6));
-      } else {
-        console.log(`${key} - ${parseFloat(Number(running_tokens).toFixed(6))}`);
+        MASTER_DATA[key] = parseFloat(user_total_tokens);
+        total_tokens += parseFloat(user_total_tokens);
       }
     }
   });
 
-  console.log(parseFloat((total_tokens).toFixed(6)));
+  console.log(`Total Tokens: ${total_tokens}`);
+  console.log("TVL:");
   console.log(TVL);
-  SUMMARY.juno_holders = parseFloat((SUMMARY.juno_holders).toFixed(6))
+  console.log("SUMMARY:");
   console.log(SUMMARY);
-  console.log(Number(((BigInt(SUMMARY.junoswap_lp_shares_lp)*BIGDECIMALS) / BigInt(TVL.junoswap_lp_shares)))/DECIMALS_1T);
-  console.log(Number(((BigInt(SUMMARY.junoswap_lp_shares_bonded)*BIGDECIMALS) / BigInt(TVL.junoswap_lp_shares)))/DECIMALS_1T);
+
   fs.writeFile(AIRDROP_FILENAME, JSON.stringify(MASTER_DATA), 'utf8', () => {});
+}
+
+function customParseFloat(amt) {
+  return parseFloat(Number(amt / DECIMALS).toFixed(6));
 }
 
 function openFile(filePath) {
